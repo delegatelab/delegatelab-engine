@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {amount,buildCorpus,modelRun,assess,digest,MAX_I128} from './index.mjs';
+const p={account:'account',delegate:'delegate',target:'sink',recipient:'recipient',alternateTarget:'other-sink',alternateRecipient:'other-recipient',function:'consume',cap:'100'};
+test('strict model accepts boundary and rejects all mutations',()=>{const r=modelRun(p);assert.equal(r.report.status,'cases-matched');assert.equal(r.observations.filter(x=>x.outcome==='accept').length,1);});
+test('mutation exposes a missing cap check with concrete failing case',()=>{const r=modelRun(p,{omitCap:true});assert.equal(r.report.status,'policy-violation');assert.deepEqual(r.report.findings.filter(x=>x.result==='unexpected-acceptance').map(x=>x.caseId),['over-cap']);});
+test('RPC error cannot become a successful policy test',()=>{const r=modelRun(p);r.observations[1].outcome='error';assert.equal(assess(r.corpus,r.observations).status,'inconclusive');});
+test('missing, duplicate and unknown observations rejected',()=>{const r=modelRun(p);assert.throws(()=>assess(r.corpus,r.observations.slice(1)));r.observations[1]=r.observations[0];assert.throws(()=>assess(r.corpus,r.observations));});
+test('policy and corpus cannot silently diverge',()=>{const r=modelRun(p);r.corpus.cases[1].expected='accept';assert.throws(()=>assess(r.corpus,r.observations));});
+test('i128 uses exact integers, rejects noncanonical and unsafe ranges',()=>{assert.equal(amount('9007199254740993'),9007199254740993n);for(const v of [100,'01','-0','1.0','1e3',(MAX_I128+1n).toString()])assert.throws(()=>amount(v));assert.throws(()=>buildCorpus({...p,cap:MAX_I128.toString()}));});
+test('canonical digests insensitive to object insertion order',()=>assert.equal(digest({a:'1',b:'2'}),digest({b:'2',a:'1'})));
